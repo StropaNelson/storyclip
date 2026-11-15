@@ -21,7 +21,7 @@ export class App {
 
   async init() {
     if ('serviceWorker' in navigator) {
-      try { await navigator.serviceWorker.register('/sw.js'); } catch (e) { console.warn('SW', e); }
+      try { await navigator.serviceWorker.register('sw.js'); } catch (e) { console.warn('SW', e); }
     }
     await storage.init();
     await mediaLibrary.init();
@@ -122,7 +122,23 @@ export class App {
       this.player.play();
       ui.showToast(clip.name);
     };
-    timeline.onTimeChange = (time) => {};
+    timeline.onTimeChange = (time) => {
+      if (!this.player.isPlaying) this.player.seek(time);
+    };
+    timeline.onClipMove = (clip) => {};
+    timeline.onClipResize = (clip) => {};
+
+    // Sincronizar playhead da timeline com o player enquanto toca
+    this.player.onTimeUpdate = (current, duration) => {
+      const el = document.getElementById('time-current');
+      if (el) el.textContent = formatTime(current);
+      const scrub = document.getElementById('preview-scrub');
+      if (scrub && !scrub.oninput) {
+        scrub.max = duration || 100;
+        scrub.value = current;
+      }
+      timeline.seek(current);
+    };
   }
 
   _wireEpisodesPanel() {
@@ -174,6 +190,7 @@ export class App {
         <div class="episode-meta">${formatTime(ep.sourceStart)} – ${formatTime(ep.sourceEnd)} · ${ep.aspectRatio} · ${ep.resolution}</div>
         <div class="episode-actions">
           <button class="btn-ep" data-id="${ep.id}" data-act="preview">Pré-visualizar</button>
+          <button class="btn-ep" data-id="${ep.id}" data-act="render">Renderizar</button>
           <button class="btn-ep" data-id="${ep.id}" data-act="config">Configurar</button>
         </div>
       `;
@@ -183,6 +200,7 @@ export class App {
           const id = btn.dataset.id;
           const act = btn.dataset.act;
           if (act === 'preview') this._previewEpisode(id);
+          else if (act === 'render') this._renderSingleEpisode(id);
           else if (act === 'config') this._openEpisodeConfig(id);
           return;
         }
@@ -202,13 +220,96 @@ export class App {
     const media = this.mediaMap.get(ep.sourceMediaId) || mediaLibrary.getItem(ep.sourceMediaId);
     if (media) {
       this.mediaMap.set(ep.sourceMediaId, media);
-      this.player.load(media.url);
-      this.player.seek(ep.sourceStart);
-      this.player.play();
-      // load structure clips into timeline
-      this._loadEpisodeIntoTimeline(ep);
+      this._playStructure(ep, media);
     }
     ui.showToast(`Pré-visualização: ${ep.title}`);
+  }
+
+  async _playStructure(ep, sourceMedia) {
+    // Monta a estrutura: abertura → resumo → conteúdo → fechamento e toca sequencialmente
+    const segments = [];
+    if (ep.opening && ep.opening.duration > 0 && ep.opening.mediaId) {
+      const om = this.mediaMap.get(ep.opening.mediaId) || mediaLibrary.getItem(ep.opening.mediaId);
+      if (om) segments.push({ media: om, start: ep.opening.start || 0, duration: ep.opening.duration, label: 'Abertura' });
+    }
+    if (ep.summary && ep.summary.duration > 0 && ep.summary.mediaId) {
+      const sm = this.mediaMap.get(ep.summary.mediaId) || mediaLibrary.getItem(ep.summary.mediaId);
+      if (sm) segments.push({ media: sm, start: ep.summary.start || 0, duration: ep.summary.duration, label: 'Resumo' });
+    }
+    if (ep.content && ep.content.duration > 0) {
+      segments.push({ media: sourceMedia, start: ep.sourceStart, duration: ep.duration, label: 'Conteúdo' });
+    }
+    if (ep.closing && ep.closing.duration > 0 && ep.closing.mediaId) {
+      const cm = this.mediaMap.get(ep.closing.mediaId) || mediaLibrary.getItem(ep.closing.mediaId);
+      if (cm) segments.push({ media: cm, start: ep.closing.start || 0, duration: ep.closing.duration, label: 'Encerramento' });
+    }
+
+    if (segments.length === 0) {
+      // Fallback: tocar só o conteúdo
+      this.player.load(sourceMedia.url);
+      this.player.seek(ep.sourceStart);
+      this.player.play();
+      return;
+    }
+
+    let segIdx = 0;
+    const playNext = () => {
+      if (segIdx >= segments.length) {
+        this.player.pause();
+        return;
+      }
+      const seg = segments[segIdx];
+      this.player.load(seg.media.url);
+      this.player.seek(seg.start);
+      const endTime = seg.start + seg.duration;
+      this.player.play();
+
+      const checkEnd = () => {
+        if (this.player.video.currentTime >= endTime - 0.2) {
+          this.player.video.removeEventListener('timeupdate', checkEnd);
+          segIdx++;
+          playNext();
+        } else {
+          this.player.video.addEventListener('timeupdate', checkEnd);
+        }
+      };
+      this.player.video.addEventListener('timeupdate', checkEnd);
+    };
+    playNext();
+    // Carrega estrutura na timeline também
+    this._loadEpisodeIntoTimeline(ep);
+  }
+
+  async _renderSingleEpisode(episodeId) {
+    const ep = episodeManager.getEpisode(episodeId);
+    if (!ep) return;
+    if (!ep.sourceMediaId) { ui.showToast('Episódio sem vídeo fonte'); return; }
+    const media = this.mediaMap.get(ep.sourceMediaId) || mediaLibrary.getItem(ep.sourceMediaId);
+    if (!media || !media.file) { ui.showToast('Arquivo fonte não disponível'); return; }
+    this.mediaMap.set(ep.sourceMediaId, media);
+
+    ui.showToast(`Renderizando ${ep.title}…`);
+    renderEngine.onProgress = (cur, total, status) => {
+      // progresso já tratado pelo ffmpeg.setProgress global
+    };
+    const res = await renderEngine.renderEpisode(ep, this.mediaMap);
+    if (res.success) {
+      ui.showToast(`Renderizado: ${res.name}`);
+      this._downloadBlob(res.blob, res.name);
+    } else {
+      ui.showToast('Erro na renderização: ' + (res.error || 'desconhecido'));
+    }
+  }
+
+  _downloadBlob(blob, name) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
 
   _loadEpisodeIntoTimeline(ep) {

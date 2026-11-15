@@ -15,6 +15,7 @@ export class Timeline {
     this.totalDuration = 0;
     this.onClipSelect = null;
     this.onClipMove = null;
+    this.onClipResize = null;
     this.onTimeChange = null;
     this.onClipAdded = null;
 
@@ -22,7 +23,9 @@ export class Timeline {
     this.dragClip = null;
     this.dragStartX = 0;
     this.dragStartTime = 0;
-    this.dragMode = 'move'; // move | resize-left | resize-right
+    this.dragMode = 'move';
+    this.dragStartWidth = 0;
+    this.dragStartStart = 0;
 
     this.pxPerSec = pxPerSecond(this.zoom);
 
@@ -51,22 +54,34 @@ export class Timeline {
   }
 
   _initEvents() {
-    // Playhead click to seek
-    this.container.addEventListener('click', (e) => {
-      if (e.target.closest('.timeline-clip')) return;
-      const rect = this.container.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const time = x / this.pxPerSec;
-      this.seek(time);
-    });
-
-    // Mouse down on track area for playhead drag
+    // Click na régua/área vazia move playhead
     this.container.addEventListener('mousedown', (e) => {
       if (e.target.closest('.timeline-clip')) return;
       if (e.target.closest('.track-label')) return;
       const rect = this.container.getBoundingClientRect();
       const x = e.clientX - rect.left;
-      this.seek(x / this.pxPerSec);
+      const time = Math.max(0, x / this.pxPerSec);
+      this.seek(time);
+    });
+
+    // Arrastar playhead clicando nele
+    this.playhead.addEventListener('mousedown', (e) => {
+      e.stopPropagation();
+      const rect = this.container.getBoundingClientRect();
+      const startX = e.clientX;
+      const startTime = this._timeFromPx(parseFloat(this.playhead.style.left || 0));
+      const onMove = (ev) => {
+        const dx = ev.clientX - startX;
+        const t = Math.max(0, startTime + dx / this.pxPerSec);
+        this.seek(t);
+        if (this.onTimeChange) this.onTimeChange(t);
+      };
+      const onUp = () => {
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+      };
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp, { once: true });
     });
   }
 
@@ -81,6 +96,13 @@ export class Timeline {
   removeClip(id) {
     this.clips = this.clips.filter((c) => c.id !== id);
     if (this.selectedClipId === id) this.selectedClipId = null;
+    this._recalcDuration();
+    this.render();
+  }
+
+  clear() {
+    this.clips = [];
+    this.selectedClipId = null;
     this._recalcDuration();
     this.render();
   }
@@ -110,7 +132,8 @@ export class Timeline {
     this.pxPerSec = pxPerSecond(this.zoom);
     document.getElementById('zoom-value').textContent = `${this.zoom}%`;
     this.render();
-    this.seek(this.playhead ? this._timeFromPx(parseFloat(this.playhead.style.left || 0)) : 0);
+    const curTime = this._timeFromPx(parseFloat(this.playhead.style.left || 0));
+    this.seek(curTime);
   }
 
   _timeFromPx(px) {
@@ -128,8 +151,7 @@ export class Timeline {
       if (end > max) max = end;
     }
     this.totalDuration = max;
-    this.totalDurationEl.textContent = formatTime(this.totalDuration);
-    // Extend ruler
+    if (this.totalDurationEl) this.totalDurationEl.textContent = formatTime(this.totalDuration);
     this._drawRuler();
   }
 
@@ -153,12 +175,17 @@ export class Timeline {
     }
   }
 
+  _rulerStep(duration) {
+    if (duration <= 30) return 5;
+    if (duration <= 60) return 10;
+    return 30;
+  }
+
   render() {
     this._drawRuler();
-    // Render clips per track
     CONFIG.tracks.forEach((track) => {
       const lane = this.tracksContainer.querySelector(`.track-lane[data-track-id="${track.id}"]`);
-      lane.innerHTML = '';
+      if (lane) lane.innerHTML = '';
     });
     for (const clip of this.clips) {
       const lane = this.tracksContainer.querySelector(`.track-lane[data-track-id="${clip.trackId}"]`);
@@ -166,28 +193,38 @@ export class Timeline {
       const el = document.createElement('div');
       el.className = `timeline-clip${this.selectedClipId === clip.id ? ' selected' : ''}`;
       el.style.left = `${this._pxFromTime(clip.startTime)}px`;
-      el.style.width = `${this._pxFromTime(clip.duration)}px`;
+      el.style.width = `${Math.max(40, this._pxFromTime(clip.duration))}px`;
       el.dataset.id = clip.id;
       el.style.backgroundColor = clip.color || '#37006e';
       el.innerHTML = `
         <div class="clip-thumb">
-          ${clip.thumbnailUrl ? `<img src="${clip.thumbnailUrl}">` : ''}
+          ${clip.thumbnailUrl ? `<img src="${clip.thumbnailUrl}" style="width:100%;height:100%;object-fit:cover;display:block;">` : ''}
         </div>
         <div class="clip-info">
           <div class="clip-name">${clip.name}</div>
           <div class="clip-time">${formatTime(clip.duration)}</div>
         </div>
+        <div class="clip-handle clip-handle-l" style="position:absolute;left:0;top:0;bottom:0;width:6px;cursor:ew-resize;z-index:3;"></div>
+        <div class="clip-handle clip-handle-r" style="position:absolute;right:0;top:0;bottom:0;width:6px;cursor:ew-resize;z-index:3;"></div>
       `;
+
+      // Mover clipe
       el.addEventListener('mousedown', (e) => {
+        if (e.target.classList.contains('clip-handle-l') || e.target.classList.contains('clip-handle-r')) {
+          e.stopPropagation();
+          this._startResize(e, clip, el, e.target.classList.contains('clip-handle-l') ? 'left' : 'right');
+          return;
+        }
         e.stopPropagation();
         this.selectClip(clip.id);
-        this._startDrag(e, el, clip);
+        this._startMove(e, clip, el);
       });
+
       lane.appendChild(el);
     }
   }
 
-  _startDrag(e, el, clip) {
+  _startMove(e, clip, el) {
     this.isDragging = true;
     this.dragClip = clip;
     this.dragStartX = e.clientX;
@@ -197,22 +234,64 @@ export class Timeline {
     const onMove = (ev) => {
       const dx = ev.clientX - this.dragStartX;
       const dt = dx / this.pxPerSec;
-      if (this.dragMode === 'move') {
-        const newTime = Math.max(0, this.dragStartTime + dt);
-        clip.startTime = newTime;
-      }
-      this.render();
+      const newTime = Math.max(0, this.dragStartTime + dt);
+      clip.startTime = newTime;
+      this.renderPartial(clip);
       this.seek(clip.startTime + clip.duration);
       if (this.onClipMove) this.onClipMove(clip);
     };
     const onUp = () => {
       this.isDragging = false;
       this.dragClip = null;
+      this.render();
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
     };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp, { once: true });
+  }
+
+  _startResize(e, clip, el, side) {
+    this.isDragging = true;
+    this.dragClip = clip;
+    this.dragStartX = e.clientX;
+    this.dragStartStart = clip.startTime;
+    this.dragStartWidth = clip.duration;
+    this.dragMode = side;
+
+    const onMove = (ev) => {
+      const dx = ev.clientX - this.dragStartX;
+      const dt = dx / this.pxPerSec;
+      if (side === 'left') {
+        const newStart = Math.max(0, this.dragStartStart + dt);
+        const newDuration = Math.max(0.5, this.dragStartStart + this.dragStartWidth - newStart);
+        clip.startTime = newStart;
+        clip.duration = newDuration;
+      } else {
+        clip.duration = Math.max(0.5, this.dragStartWidth + dt);
+      }
+      this.renderPartial(clip);
+      if (this.onClipResize) this.onClipResize(clip);
+    };
+    const onUp = () => {
+      this.isDragging = false;
+      this.dragClip = null;
+      this.render();
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp, { once: true });
+  }
+
+  renderPartial(clip) {
+    // Re-render só a posição/tamanho de um clipe específico sem redesenhar tudo
+    const el = this.container.querySelector(`.timeline-clip[data-id="${clip.id}"]`);
+    if (!el) return;
+    el.style.left = `${this._pxFromTime(clip.startTime)}px`;
+    el.style.width = `${Math.max(40, this._pxFromTime(clip.duration))}px`;
+    const timeEl = el.querySelector('.clip-time');
+    if (timeEl) timeEl.textContent = formatTime(clip.duration);
   }
 
   destroy() {}

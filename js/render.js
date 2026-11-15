@@ -3,6 +3,7 @@ import { formatTime } from './config.js';
 let ffmpeg = null;
 let ffmpegLoaded = false;
 let ffmpegLoading = false;
+let isAborting = false;
 
 export class RenderEngine {
   constructor() {
@@ -12,6 +13,7 @@ export class RenderEngine {
     this.isRendering = false;
     this.queue = [];
     this.currentIndex = 0;
+    this.abortController = null;
   }
 
   async loadFFmpeg() {
@@ -25,12 +27,12 @@ export class RenderEngine {
             else reject(new Error('FFmpeg.wasm falhou ao carregar'));
           }
         }, 200);
-        setTimeout(() => { clearInterval(iv); reject(new Error('Timeout carregando FFmpeg.wasm')); }, 60000);
+        setTimeout(() => { clearInterval(iv); reject(new Error('Timeout carregando FFmpeg.wasm')); }, 120000);
       });
     }
     ffmpegLoading = true;
     try {
-      const { createFFmpeg, fetchFile } = await import('https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/esm/index.js');
+      const { createFFmpeg, fetchFile } = await import('https://unpkg.com/@ffmpeg/ffmpeg@0.12.1/dist/esm/index.js');
       ffmpeg = createFFmpeg({ log: true });
       ffmpeg.setProgress(({ ratio }) => {
         if (this.onProgress) this.onProgress(ratio);
@@ -47,34 +49,97 @@ export class RenderEngine {
   }
 
   async renderEpisode(episode, mediaMap) {
+    isAborting = false;
+    this.abortController = new AbortController();
     try {
       const ff = await this.loadFFmpeg();
-      const inputName = 'input.mp4';
-      const outputName = `Episodio_${String(episode.number).padStart(2, '0')}.mp4`;
-
-      // Registrar arquivo fonte
       const source = mediaMap.get(episode.sourceMediaId);
       if (!source || !source.file) throw new Error('Arquivo fonte não disponível localmente');
-      ff.fs('writeFile', inputName, await this._fileToBuffer(source.file));
 
+      // Nome de saída
+      const outputName = `Episodio_${String(episode.number).padStart(2, '0')}.mp4`;
+
+      // Escrever arquivo fonte no MEMORY FS do ffmpeg.wasm
+      await ff.fs('writeFile', 'input.mp4', await this._fileToBuffer(source.file));
+
+      // Construir lista de segmentos da estrutura do episódio
+      // Estrutura: abertura → resumo → conteúdo → fechamento
+      const segments = []; // { inputName, start, duration }
+
+      // Abertura
+      if (episode.opening && episode.opening.duration > 0 && episode.opening.mediaId) {
+        const om = mediaMap.get(episode.opening.mediaId) || source;
+        if (om && om.file) {
+          const oname = `opening_${episode.id}.mp4`;
+          await ff.fs('writeFile', oname, await this._fileToBuffer(om.file));
+          segments.push({ name: oname, start: episode.opening.start || 0, duration: episode.opening.duration });
+        }
+      }
+
+      // Resumo
+      if (episode.summary && episode.summary.duration > 0 && episode.summary.mediaId) {
+        const sm = mediaMap.get(episode.summary.mediaId) || source;
+        if (sm && sm.file) {
+          const sname = `summary_${episode.id}.mp4`;
+          await ff.fs('writeFile', sname, await this._fileToBuffer(sm.file));
+          segments.push({ name: sname, start: episode.summary.start || 0, duration: episode.summary.duration });
+        }
+      }
+
+      // Conteúdo principal (do vídeo fonte)
+      segments.push({ name: 'input.mp4', start: episode.sourceStart, duration: episode.duration });
+
+      // Fechamento
+      if (episode.closing && episode.closing.duration > 0 && episode.closing.mediaId) {
+        const cm = mediaMap.get(episode.closing.mediaId) || source;
+        if (cm && cm.file) {
+          const cname = `closing_${episode.id}.mp4`;
+          await ff.fs('writeFile', cname, await this._fileToBuffer(cm.file));
+          segments.push({ name: cname, start: episode.closing.start || 0, duration: episode.closing.duration });
+        }
+      }
+
+      // Dimensões
       const dims = this._getDimensions(episode);
       const vf = this._buildVideoFilter(episode, dims);
 
+      // Montar filtro complexo: cortar cada segmento, escalar, concatenar
+      const inputs = [];
+      const filterParts = [];
+      let concatInputs = '';
+      let idx = 0;
+
+      for (const seg of segments) {
+        const inLabel = `in${idx}`;
+        inputs.push('-i', seg.name);
+        // Cortar segmento: select=between(t\,start\,start+dur), setpts, scale, pad
+        const start = seg.start;
+        const end = start + seg.duration;
+        const trim = `trim=start=${start}:end=${end},setpts=PTS-STARTPTS`;
+        const scale = `scale=${dims.width}:${dims.height}:force_original_aspect_ratio=decrease,pad=${dims.width}:${dims.height}:(ow-iw)/2:(oh-ih)/2`;
+        filterParts.push(`[${idx}:v]${trim},${scale}[v${idx}]`);
+        // Áudio
+        filterParts.push(`[${idx}:a]atrim=start=${start}:end=${end},asetpts=PTS-STARTPTS[a${idx}]`);
+        concatInputs += `[v${idx}][a${idx}]`;
+        idx++;
+      }
+
+      // Concatenação
+      filterParts.push(`${concatInputs}concat=n=${segments.length}:v=1:a=1[outv][outa]`);
+
+      const filterComplex = filterParts.join(';');
+
       const args = [
-        '-i', inputName,
-        '-ss', episode.sourceStart.toString(),
-        '-t', episode.duration.toString(),
-        '-vf', vf,
-        '-s', `${dims.width}x${dims.height}`,
-        '-c:v', 'libx264',
-        '-preset', 'fast',
-        '-crf', episode.quality || '23',
-        '-c:a', 'aac',
-        '-b:a', '128k',
+        ...inputs,
+        '-filter_complex', filterComplex,
+        '-map', '[outv]', '-map', '[outa]',
+        '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
+        '-c:a', 'aac', '-b:a', '128k',
         '-movflags', '+faststart',
         outputName,
       ];
 
+      // Executar com monitoramento de progresso via ffmpeg.stderr não disponível; usamos setProgress global
       await ff.run(...args);
 
       const data = ff.fs('readFile', outputName);
@@ -83,6 +148,8 @@ export class RenderEngine {
       return { success: true, url, blob, name: outputName };
     } catch (e) {
       return { success: false, error: e.message };
+    } finally {
+      this.abortController = null;
     }
   }
 
@@ -92,6 +159,7 @@ export class RenderEngine {
     this.isRendering = true;
     const results = [];
     for (const ep of this.queue) {
+      if (!this.isRendering) break;
       if (this.onProgress) this.onProgress(ep.number, this.queue.length, 'rendering');
       const res = await this.renderEpisode(ep, mediaMap);
       results.push({ episode: ep, ...res });
@@ -118,13 +186,14 @@ export class RenderEngine {
   }
 
   _buildVideoFilter(episode, dims) {
-    const { width, height } = dims;
+    // Filtro de enquadramento baseado no cropMode
     const mode = episode.cropMode || 'center';
-    let filter = `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2`;
+    const { width, height } = dims;
+    let base = `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2`;
     if (mode === 'fill-blur') {
-      filter = `scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},boxblur=luma_radius=min(h,w)/20:luma_power=1:chroma_radius=min(cw,ch)/20:chroma_power=1[bg];[0:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2`;
+      base = `scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height}`;
     }
-    return filter;
+    return base;
   }
 
   async _fileToBuffer(file) {
