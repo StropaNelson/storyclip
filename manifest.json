@@ -2,62 +2,62 @@
   "name": "ClipStudio",
   "short_name": "ClipStudio",
   "description": "Editor de vídeo para criação de séries de vídeos curtos. Processamento local.",
-  "start_url": "/",
+  "start_url": "./",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#0a0a0a",
   "theme_color": "#0a0a0a",
   "icons": [
     {
-      "src": "/assets/icon-72.svg",
+      "src": "assets/icon-72.svg",
       "sizes": "72x72",
       "type": "image/svg+xml",
       "purpose": "any maskable"
     },
     {
-      "src": "/assets/icon-96.svg",
+      "src": "assets/icon-96.svg",
       "sizes": "96x96",
       "type": "image/svg+xml",
       "purpose": "any maskable"
     },
     {
-      "src": "/assets/icon-128.svg",
+      "src": "assets/icon-128.svg",
       "sizes": "128x128",
       "type": "image/svg+xml",
       "purpose": "any maskable"
     },
     {
-      "src": "/assets/icon-144.svg",
+      "src": "assets/icon-144.svg",
       "sizes": "144x144",
       "type": "image/svg+xml",
       "purpose": "any maskable"
     },
     {
-      "src": "/assets/icon-152.svg",
+      "src": "assets/icon-152.svg",
       "sizes": "152x152",
       "type": "image/svg+xml",
       "purpose": "any maskable"
     },
     {
-      "src": "/assets/icon-192.svg",
+      "src": "assets/icon-192.svg",
       "sizes": "192x192",
       "type": "image/svg+xml",
       "purpose": "any maskable"
     },
     {
-      "src": "/assets/icon-384.svg",
+      "src": "assets/icon-384.svg",
       "sizes": "384x384",
       "type": "image/svg+xml",
       "purpose": "any maskable"
     },
     {
-      "src": "/assets/icon-512.svg",
+      "src": "assets/icon-512.svg",
       "sizes": "512x512",
       "type": "image/svg+xml",
       "purpose": "any maskable"
     },
     {
-      "src": "/assets/icon-180.svg",
+      "src": "assets/icon-180.svg",
       "sizes": "180x180",
       "type": "image/svg+xml",
       "purpose": "apple touch icon"
