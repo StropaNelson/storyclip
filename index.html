@@ -28,8 +28,9 @@
         <div class="brand-name">ClipStudio</div>
       </div>
       <div class="header-actions">
-        <button class="btn-icon" id="btn-import" title="Importar mídia">
+        <button class="btn-import" id="btn-import" title="Importar mídia">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <span>Importar</span>
         </button>
         <button class="btn-icon" id="btn-play" title="Reproduzir">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
@@ -63,8 +64,10 @@
           <!-- Media items injected here -->
           <div class="empty-state" id="media-empty">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.3"><path d="M4 16.5A2.5 2.5 0 0 1 6.5 14H18v5H4z"/><path d="M9.5 9.5h-7A2.5 2.5 0 0 1 0 7v-7A2.5 2.5 0 0 1 2.5 0h7A2.5 2.5 0 0 1 12 2.5v7A2.5 2.5 0 0 1 9.5 9.5z"/></svg>
-            <p>Nenhum mídia importada</p>
-            <button class="btn-primary mt-3" id="btn-import-empty">Importar vídeos</button>
+            <h3 style="margin:16px 0 8px 0;color:var(--color-text);">Biblioteca vazia</h3>
+            <p style="color:var(--color-text-muted);font-size:13px;line-height:1.5;max-width:240px;margin:0 auto 20px;">Não há vídeos importados ainda. Toque no botão abaixo para escolher um vídeo da sua galeria ou arquivos.</p>
+            <button class="btn-primary mt-3" id="btn-import-empty">Importar vídeo da galeria</button>
+            <p style="color:var(--color-text-subtle);font-size:11px;margin-top:12px;">Os vídeos ficam no seu dispositivo. Nada é enviado para servidor.</p>
           </div>
         </div>
       </aside>
@@ -183,13 +186,19 @@
           <button class="modal-close" id="modal-import-close">×</button>
         </div>
         <div class="modal-body">
-          <input type="file" id="file-input" multiple webkitdirectory accept="video/*,image/*">
-          <div class="import-hint">
-            Suportado: MP4, MOV, AVI, WebM, MKV, JPG, PNG. Os arquivos permanecem no seu dispositivo.
+          <div class="import-options" style="display:flex;flex-direction:column;gap:12px;">
+            <label class="import-option">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;opacity:0.5;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <span>Selecionar da galeria / arquivos</span>
+              <input type="file" id="file-input" multiple accept="video/*,image/*" style="display:none;">
+            </label>
+            <div class="import-hint">
+              Suportado: MP4, MOV, AVI, WebM, MKV, JPG, PNG. Os arquivos permanecem no seu dispositivo.
+            </div>
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn-secondary" id="modal-import-cancel">Cancelar</button>
+          <button class="btn-secondary" id="modal-import-cancel">Fechar</button>
         </div>
       </div>
     </div>

@@ -68,14 +68,30 @@ export class App {
       if (items.length === 0) empty.classList.remove('hidden');
       else empty.classList.add('hidden');
     };
-    document.getElementById('btn-import').addEventListener('click', () => document.getElementById('file-input').click());
-    document.getElementById('btn-import-empty').addEventListener('click', () => document.getElementById('file-input').click());
+    const openImport = () => document.getElementById('modal-import').classList.add('visible');
+    const closeImport = () => document.getElementById('modal-import').classList.remove('visible');
+
+    document.getElementById('btn-import').addEventListener('click', openImport);
+    document.getElementById('btn-import-empty').addEventListener('click', openImport);
+    document.getElementById('modal-import-close').addEventListener('click', closeImport);
+    document.getElementById('modal-import-cancel').addEventListener('click', closeImport);
+
     document.getElementById('file-input').addEventListener('change', async (e) => {
       const files = Array.from(e.target.files);
       if (files.length === 0) return;
-      const added = await mediaLibrary.importFiles(files);
-      ui.showToast(`${added.length} item(ns) importado(s)`);
-      e.target.value = '';
+      const btn = document.getElementById('modal-import-cancel');
+      const originalText = btn.textContent;
+      btn.textContent = 'Importando…';
+      btn.disabled = true;
+      try {
+        const added = await mediaLibrary.importFiles(files);
+        ui.showToast(`${added.length} item(ns) importado(s)`);
+      } finally {
+        btn.textContent = originalText;
+        btn.disabled = false;
+        closeImport();
+        e.target.value = '';
+      }
     });
   }
 
