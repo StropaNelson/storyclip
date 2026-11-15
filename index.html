@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0a0a0a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ClipStudio">
+  <title>ClipStudio — Editor de Vídeo para Séries</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/icon-32.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+  <link rel="apple-touch-icon" href="/assets/icon-180.png">
+  <link rel="stylesheet" href="/css/variables.css">
+  <link rel="stylesheet" href="/css/reset.css">
+  <link rel="stylesheet" href="/css/layout.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/timeline.css">
+  <link rel="stylesheet" href="/css/player.css">
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Header / Navbar -->
+    <header class="app-header">
+      <div class="header-brand">
+        <div class="brand-icon">CS</div>
+        <div class="brand-name">ClipStudio</div>
+      </div>
+      <div class="header-actions">
+        <button class="btn-icon" id="btn-import" title="Importar mídia">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        </button>
+        <button class="btn-icon" id="btn-play" title="Reproduzir">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        </button>
+        <button class="btn-icon" id="btn-export" title="Exportar episódio">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </button>
+        <button class="btn-icon" id="btn-episodes" title="Episódios">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2z"/></svg>
+        </button>
+        <div class="project-info">
+          <span id="proj-name" class="proj-label">Projeto sem nome</span>
+          <span id="proj-duration" class="proj-duration">00:00:00</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main workspace -->
+    <main class="app-main">
+      <!-- Left: Media Library -->
+      <aside class="panel panel-media" id="panel-media">
+        <div class="panel-header">
+          <h3>Biblioteca de Mídia</h3>
+          <div class="panel-controls">
+            <button class="btn-sm" id="btn-media-import" title="Importar">+ Importar</button>
+            <button class="btn-sm btn-list" id="btn-view-list" title="Lista"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></button>
+            <button class="btn-sm btn-grid active" id="btn-view-grid" title="Grade"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg></button>
+          </div>
+        </div>
+        <div class="media-list" id="media-list">
+          <!-- Media items injected here -->
+          <div class="empty-state" id="media-empty">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.3"><path d="M4 16.5A2.5 2.5 0 0 1 6.5 14H18v5H4z"/><path d="M9.5 9.5h-7A2.5 2.5 0 0 1 0 7v-7A2.5 2.5 0 0 1 2.5 0h7A2.5 2.5 0 0 1 12 2.5v7A2.5 2.5 0 0 1 9.5 9.5z"/></svg>
+            <p>Nenhum mídia importada</p>
+            <button class="btn-primary mt-3" id="btn-import-empty">Importar vídeos</button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Center: Preview + Timeline -->
+      <section class="workspace-center">
+        <!-- Preview panel -->
+        <div class="preview-panel" id="preview-panel">
+          <div class="preview-toolbar">
+            <span class="preview-label">Pré-visualização</span>
+            <div class="preview-controls">
+              <button class="btn-icon-small" id="btn-fullscreen" title="Tela cheia">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 3h-3a2 2 0 0 0-2 2v3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+              </button>
+              <button class="btn-icon-small" id="btn-fit" title>Ajustar à tela">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21v-4a2 2 0 0 1 2-2h4"/><path d="M17 3h4a2 2 0 0 1 2 2v4"/><path d="M23 11v10a2 2 0 0 1-2 2h-4"/><path d="M1 13H7a2 2 0 0 1 2-2V3"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="preview-wrap" id="preview-wrap">
+            <video id="preview-video" class="preview-video" preload="metadata" playsinline webkit-playsinline></video>
+            <div class="playback-overlay" id="playback-overlay">
+              <div class="play-btn" id="playback-play">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              </div>
+            </div>
+            <div class="preview-time" id="preview-time">
+              <span id="time-current">00:00</span> / <span id="time-duration">00:00</span>
+            </div>
+            <input type="range" class="preview-scrub" id="preview-scrub" min="0" max="100" value="0">
+          </div>
+        </div>
+
+        <!-- Timeline panel -->
+        <div class="timeline-panel" id="timeline-panel">
+          <div class="timeline-toolbar">
+            <div class="zoom-controls">
+              <span class="zoom-label">Zoom</span>
+              <button class="btn-zoom" id="btn-zoom-out" title="Zoom out">–</button>
+              <span class="zoom-value" id="zoom-value">100%</span>
+              <button class="btn-zoom" id="btn-zoom-in" title="Zoom in">+</button>
+            </div>
+            <div class="track-controls">
+              <button class="btn-track-add" id="btn-add-track" title="Adicionar faixa">+ Faixa</button>
+            </div>
+          </div>
+          <div class="timeline-ruler" id="timeline-ruler"></div>
+          <div class="timeline-wrap" id="timeline-wrap">
+            <div class="timeline-tracks" id="timeline-tracks"></div>
+            <div class="timeline-playhead" id="timeline-playhead">
+              <div class="playhead-line"></div>
+              <div class="playhead-time" id="playhead-time">00:00</div>
+            </div>
+          </div>
+          <div class="timeline-bottom">
+            <div class="total-duration">
+              <span class="label">Duração:</span>
+              <span id="total-duration" class="value">00:00:00</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right: Inspector (hidden on mobile by default) -->
+      <aside class="panel panel-inspector" id="panel-inspector">
+        <div class="panel-header">
+          <h3>Propriedades</h3>
+          <button class="btn-close-panel" id="btn-close-inspector" title="Fechar">×</button>
+        </div>
+        <div class="inspector-content" id="inspector-content">
+          <div class="inspector-section">
+            <h4>Segmento selecionado</h4>
+            <div class="form-group">
+              <label>Início</label>
+              <input type="text" id="ins-start" placeholder="00:00:00">
+            </div>
+            <div class="form-group">
+              <label>Fim</label>
+              <input type="text" id="ins-end" placeholder="00:00:00">
+            </div>
+            <div class="form-group">
+              <label>Duração</label>
+              <input type="text" id="ins-duration" readonly placeholder="00:00:00">
+            </div>
+          </div>
+          <div class="inspector-actions">
+            <button class="btn-danger" id="btn-remove-clip">Remover segmento</button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Right: Episodes panel (desktop) -->
+      <aside class="panel panel-episodes" id="panel-episodes">
+        <div class="panel-header">
+          <h3>Episódios</h3>
+          <div class="panel-controls">
+            <button class="btn-sm" id="btn-gen-episodes" title="Gerar episódios">Gerar</button>
+            <button class="btn-close-panel" id="btn-close-episodes" title="Fechar">×</button>
+          </div>
+        </div>
+        <div class="episodes-list" id="episodes-list">
+          <!-- injected -->
+        </div>
+        <div class="panel-footer" style="padding:10px 14px;border-top:1px solid var(--color-border);display:flex;gap:8px;">
+          <button class="btn-primary" id="btn-render-all">Renderizar todos</button>
+          <button class="btn-secondary" id="btn-export-zip">ZIP</button>
+        </div>
+      </aside>
+    </main>
+
+    <!-- Modals -->
+    <div class="modal-overlay" id="modal-import">
+      <div class="modal">
+        <div class="modal-header">
+          <h3>Importar Mídia</h3>
+          <button class="modal-close" id="modal-import-close">×</button>
+        </div>
+        <div class="modal-body">
+          <input type="file" id="file-input" multiple webkitdirectory accept="video/*,image/*">
+          <div class="import-hint">
+            Suportado: MP4, MOV, AVI, WebM, MKV, JPG, PNG. Os arquivos permanecem no seu dispositivo.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" id="modal-import-cancel">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <!-- Modal: Episódios -->
+    <div class="modal-overlay" id="modal-episode">
+      <div class="modal" style="max-height:85vh;">
+        <div class="modal-header">
+          <h3 id="episode-modal-title">Episódio</h3>
+          <button class="modal-close" id="modal-episode-close">×</button>
+        </div>
+        <div class="modal-body" style="overflow-y:auto;">
+          <div class="form-group">
+            <label>Número</label>
+            <input type="number" id="ep-number" min="1">
+          </div>
+          <div class="form-group">
+            <label>Título</label>
+            <input type="text" id="ep-title">
+          </div>
+          <div class="form-group">
+            <label>Proporção</label>
+            <select id="ep-aspect"></select>
+          </div>
+          <div class="form-group">
+            <label>Resolução</label>
+            <select id="ep-resolution"></select>
+          </div>
+          <div class="form-group">
+            <label>Duração do episódio (s)</label>
+            <input type="number" id="ep-duration" min="1">
+          </div>
+          <div class="form-group" style="margin-top:12px;">
+            <label style="display:block;margin-bottom:4px;">Estrutura</label>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn-sm" id="ep-set-opening">Abertura</button>
+              <button class="btn-sm" id="ep-set-summary">Resumo</button>
+              <button class="btn-sm" id="ep-set-closing">Encerramento</button>
+              <button class="btn-sm" id="ep-set-cover">Capa</button>
+            </div>
+          </div>
+          <div id="ep-structure-info" style="margin-top:10px;font-size:12px;color:var(--color-text-muted);"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" id="modal-episode-cancel">Cancelar</button>
+          <button class="btn-primary" id="modal-episode-save">Salvar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Projetos -->
+    <div class="modal-overlay" id="modal-projects">
+      <div class="modal" style="max-width:640px;">
+        <div class="modal-header">
+          <h3>Projetos</h3>
+          <button class="modal-close" id="modal-projects-close">×</button>
+        </div>
+        <div class="modal-body" style="overflow-y:auto;max-height:400px;">
+          <div class="form-group" style="margin-bottom:12px;">
+            <label>Novo projeto</label>
+            <input type="text" id="proj-new-name" placeholder="Nome do projeto">
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:16px;">
+            <button class="btn-primary" id="proj-new">Criar</button>
+            <button class="btn-secondary" id="proj-import-file">Importar arquivo</button>
+            <input type="file" id="proj-import-input" accept=".clipstudio,.json" style="display:none;">
+          </div>
+          <div id="proj-list"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" id="modal-projects-close2">Fechar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/js/config.js"></script>
+  <script type="module" src="/js/db.js"></script>
+  <script type="module" src="/js/storage.js"></script>
+  <script type="module" src="/js/media-library.js"></script>
+  <script type="module" src="/js/player.js"></script>
+  <script type="module" src="/js/timeline.js"></script>
+  <script type="module" src="/js/ui.js"></script>
+  <script type="module" src="/js/app.js"></script>
+  <script type="module" src="/js/episode.js"></script>
+  <script type="module" src="/js/intro-outro.js"></script>
+  <script type="module" src="/js/format.js"></script>
+  <script type="module" src="/js/project.js"></script>
+  <script type="module" src="/js/render.js"></script>
+</body>
+</html>
