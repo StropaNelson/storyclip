@@ -76,6 +76,13 @@ export class App {
     document.getElementById('modal-import-close').addEventListener('click', closeImport);
     document.getElementById('modal-import-cancel').addEventListener('click', closeImport);
 
+    // Abrir seletor de arquivos ao clicar na opção (clique programático para funcionar no iOS)
+    document.getElementById('btn-pick-files').addEventListener('click', () => {
+      const input = document.getElementById('file-input');
+      input.value = '';
+      input.click();
+    });
+
     document.getElementById('file-input').addEventListener('change', async (e) => {
       const files = Array.from(e.target.files);
       if (files.length === 0) return;
